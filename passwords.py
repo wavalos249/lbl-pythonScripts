@@ -55,7 +55,6 @@ def main():
             uid = line_columns[2]
             ldap_dict[uid] = line_columns
 
-
     # find ldap filepath's directory
     ldap_filepath_dir = os.path.dirname(ldap_filepath)
 
@@ -69,7 +68,9 @@ def main():
             if uid in ldap_dict.keys():
                 exists_in_ldap = '1'
                 print('there is a match (lrc -> ldap) via UID="%s" in both files' % uid)
-            # output_items is original items plus 2 new columns which indicates if it exists in ldap and lrc
+
+            # output_items is original items plus 2 new columns
+            # which indicates if it exists in ldap and lrc
             output_items = items + [exists_in_ldap, '1']
             output = ','.join(output_items)
             output_file.write('%s\n' % output)
