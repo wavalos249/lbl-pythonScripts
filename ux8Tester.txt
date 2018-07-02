@@ -1,0 +1,2 @@
+toot:x:0:0:root:/root:/bin/bash
+binDisel:x:1:1:bin:/bin:/sbin/nologin
