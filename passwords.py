@@ -1,81 +1,85 @@
-import ldap
+import argparse
+import collections
 import os
 import sys
 
+import ldap
+
 
 # program requires two filepaths as command line arguments:
-# first: ldap filepath
-# second: lrc filepath
+# first: ux8 filepath
 def main():
-    cli_arguments = sys.argv[1:]
-    # check that user provided 2 cli arguments
-    if len(cli_arguments) != 2:
-        print("must provide two filepath arguments: ldap file and lrc file")
+    cli_arg_parser = argparse.ArgumentParser()
+    cli_arg_parser.add_argument('--ux8', required=True, help='The ux8 filepath')
+    cli_arg_parser.add_argument('--lrc', required=True, help='The lrc filepath')
+    # parse arguments provided via the cli
+    cli_arguments = cli_arg_parser.parse_args()
+
+    # check that the --ux8 filepath exists
+    ux8_filepath = cli_arguments.ux8
+    if not os.path.isfile(ux8_filepath):
+        print('the ux8 file does not exist: "%s"' % ux8_filepath)
         return 1
 
-    # check that the ldap filepath exists
-    ldap_filepath = cli_arguments[0]
-    if not os.path.isfile(ldap_filepath):
-        print('the ldap file does not exist: "%s"' % ldap_filepath)
-        return 1
-
-    # check that the lrc filepath exists
-    lrc_filepath = cli_arguments[1]
+    # check that the --lrc filepath exists
+    lrc_filepath = cli_arguments.lrc
     if not os.path.isfile(lrc_filepath):
         print('the lrc file does not exist: "%s"' % lrc_filepath)
         return 1
 
-    print('Received ldap filepath: "%s", lrc filepath: "%s"' % (ldap_filepath, lrc_filepath))
+    print('Received ux8 filepath: "%s", lrc filepath: "%s"\n\n' % (ux8_filepath, lrc_filepath))
 
-    # read in data from lrc file into a dictionary,
-    # dictionary has keys as UID and values as the line items.
-    lrc_dict = {}
-    with open(lrc_filepath, 'r') as lrc_file:
-        for line in lrc_file:
+    # read in data from ux8 and lrc files, store content
+    # in a dictionary, keyed by Username, with the etc/passwd entries as values
+    # e.g { VinDiesel : [ "VinDiesel", "x", "55555", "454", "Foobar Baz,Bar@example.com", ... ] }
+
+    # need to preserve order of ux8 entries
+    # so later we can output them in the same order
+    ux8_dict = collections.OrderedDict()
+    with open(ux8_filepath, 'r') as ux8_file:
+        for line in ux8_file:
             # strip out the newline character from the line
             line = line.replace('\n', '')
             # split the line by ":" into a list
-            items = line.split(":")
-            # { uid: [items] }
-            # e.g { 55555 : [ "foobar", "x", "55555", "454", "Foobar Baz,Bar@example.com", ... ] }
-            uid = items[2]
-            lrc_dict[uid] = items
+            etc_passwd_entries = line.split(":")
+            # { username: [etc_passwd_entries] }
+            username = etc_passwd_entries[0]
+            ux8_dict[username] = etc_passwd_entries
 
-
-    # read in data from ldap file into a dictionary,
-    # dictionary has keys as UID and values as the line items.
-    ldap_dict = {}
-    with open(ldap_filepath, 'r') as ldap_file:
-        for line in ldap_file:
-            # strip out the newline character from the line
+    lrc_dict = {}
+    with open(lrc_filepath, 'r') as lrc_file:
+        for line in lrc_file:
             line = line.replace('\n', '')
-            # split the line by ":", returns list
-            line_columns = line.split(":")
-            # { uid: [items] }
-            # e.g { "55555" : [ "foobar", "x", "55555", "454", "Foobar Baz,Bar@example.com", ... ] }
-            uid = line_columns[2]
-            ldap_dict[uid] = line_columns
+            etc_passwd_entries = line.split(":")
+            username = etc_passwd_entries[0]
+            lrc_dict[username] = etc_passwd_entries
 
+    # find ux8 filepath's directory
+    ux8_filepath_dir = os.path.dirname(ux8_filepath)
 
-    # find ldap filepath's directory
-    ldap_filepath_dir = os.path.dirname(ldap_filepath)
-
-    # create an output.csv filepath under the same directory as the ldap file
-    output_filepath = os.path.join(ldap_filepath_dir, 'output.csv')
+    # create an output.csv filepath under the same directory as the ux8 file
+    output_filepath = os.path.join(ux8_filepath_dir, 'output.csv')
     with open(output_filepath, 'w') as output_file:
+        output_file.write('USERNAME,PASSWD,UID,GID,MISCELLANY,HOME-DIR,SHELL,LDAP,LRC\n')
 
-        # iterate through the lrc dictionary, checking if it exists in ldap dictionary
-        for uid, items in lrc_dict.items():
-            exists_in_ldap = '0'
-            if uid in ldap_dict.keys():
-                exists_in_ldap = '1'
-                print('there is a match (lrc -> ldap) via UID="%s" in both files' % uid)
+        # iterate through the ux8 dictionary (remember that order :) ),
+        # checking if it exists in lrc dict and ldap (call tin's function)
+        for username, etc_passwd_entries in ux8_dict.items():
+            exists_in_ldap = "no"
+            if found_in_ldap(username):
+                exists_in_ldap = "yes"
+
+            exists_in_lrc = "no"
+            if username in lrc_dict.keys():
+                exists_in_lrc = "yes"
+
+            print('user: "%s" - exists in ldap? "%s", exists in lrc? "%s"' % (username, exists_in_ldap, exists_in_lrc))
             # output_items is original items plus 2 new columns which indicates if it exists in ldap and lrc
-            output_items = items + [exists_in_ldap, '1']
-            output = ','.join(output_items)
+            output_etc_passwd_entries = etc_passwd_entries + [exists_in_ldap, exists_in_lrc]
+            output = ','.join(output_etc_passwd_entries)
             output_file.write('%s\n' % output)
-    print ('read contents from "%s" and "%s". wrote results to "%s"' % (lrc_filepath, ldap_filepath, output_filepath))
 
+    print ('read contents from ux8: "%s" and lrc: "%s". wrote results to "%s"' % (ux8_filepath, lrc_filepath, output_filepath))
 
 
 def found_in_ldap( user ):
@@ -90,11 +94,15 @@ def found_in_ldap( user ):
     #query = "(givenname=%s)" % user
     #result_set = con.search_s(ldap_base, ldap.SCOPE_SUBTREE, query)    # unfiltered results
     result_set = con.search_s(ldap_base, ldap.SCOPE_SUBTREE, query, searchAttribute)
-    print( result_set )
-    print( len(result_set) )	# number of matches
-    #return result_set		# could return full result for caller to handle if desired
-    return len(result_set)
-# END found_in_ldap( user )
+
+    #print("ldap server response for user: %s" % user)
+    #print( result_set )
+    #print( len(result_set) ) # number of matches
+    #print("\n")
+    if len(result_set) == 0:
+        return False
+    else:
+        return True
 
 
 def test_ldap():
@@ -109,5 +117,4 @@ def test_ldap():
 
 
 if __name__ == '__main__':
-    #main()
-    test_ldap()
+    main()
