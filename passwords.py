@@ -6,6 +6,10 @@ import sys
 import ldap
 
 
+COLUMNS = ['USERNAME','PASSWD','UID','GID','MISCELLANY','HOME-DIR','SHELL','LDAP','LRC']
+SEPARATOR = '\t'
+
+
 # program requires two filepaths as command line arguments:
 # first: ux8 filepath
 def main():
@@ -58,9 +62,9 @@ def main():
     ux8_filepath_dir = os.path.dirname(ux8_filepath)
 
     # create an output.csv filepath under the same directory as the ux8 file
-    output_filepath = os.path.join(ux8_filepath_dir, 'output.csv')
+    output_filepath = os.path.join(ux8_filepath_dir, 'output.txt')
     with open(output_filepath, 'w') as output_file:
-        output_file.write('USERNAME,PASSWD,UID,GID,MISCELLANY,HOME-DIR,SHELL,LDAP,LRC\n')
+        output_file.write('%s\n' % SEPARATOR.join(COLUMNS))
 
         # iterate through the ux8 dictionary (remember that order :) ),
         # checking if it exists in lrc dict and ldap (call tin's function)
@@ -76,8 +80,7 @@ def main():
             print('user: "%s" - exists in ldap? "%s", exists in lrc? "%s"' % (username, exists_in_ldap, exists_in_lrc))
             # output_items is original items plus 2 new columns which indicates if it exists in ldap and lrc
             output_etc_passwd_entries = etc_passwd_entries + [exists_in_ldap, exists_in_lrc]
-            output = ','.join(output_etc_passwd_entries)
-            output_file.write('%s\n' % output)
+            output_file.write('%s\n' % SEPARATOR.join(output_etc_passwd_entries))
 
     print ('read contents from ux8: "%s" and lrc: "%s". wrote results to "%s"' % (ux8_filepath, lrc_filepath, output_filepath))
 
